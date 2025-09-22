@@ -86,6 +86,13 @@ def document_node(projectId: str, req: DocumentNodeRequest):
             chunk_size=req.chunk_size,
             chunk_overlap=50
         )
+        if req.chunk_size <= 0:
+            raise HTTPException(status_code=400, detail="chunk_size는 1 이상이어야 합니다")
+        chunk_overlap = min(50, max(0, req.chunk_size - 1))
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size = req.chunk_size,
+            chunk_overlap = chunk_overlap
+        )
         split_docs = splitter.split_documents(documents)
 
         # projectId 검증 - 영숫자와 언더스코어만 허용
