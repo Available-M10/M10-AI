@@ -96,6 +96,13 @@ def document_node(projectId: str, req: DocumentNodeRequest):
         if os.path.exists(db_dir):
             shutil.rmtree(db_dir)
 
+        # 벡터 저장소에 문서 저장
+        vectorstore = Chroma.from_documents(
+            documents = split_docs,
+            embedding = embedding_instance,
+            persist_directory = db_dir
+        )
+
         logging.info(f"[문서 노드] Vector DB 저장 완료: {db_dir}")
 
         os.remove(tmp_path)
@@ -110,6 +117,7 @@ def document_node(projectId: str, req: DocumentNodeRequest):
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
+
 
 # LLM 노드
 @app.post("/node/{projectId}/llm")
