@@ -14,9 +14,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.base import Embeddings
 import google.generativeai as genai
 
-# -------------------------------
+
 # 환경 설정
-# -------------------------------
 BASE_DIR = "/app/vector_store"
 os.makedirs(BASE_DIR, exist_ok=True)
 EMBEDDING_MODEL_NAME = "./models--BM-K--KoSimCSE-bert-multitask"
@@ -24,7 +23,7 @@ VECTOR_DB_NAME = "chroma"
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
-# 임베딩 모델 로드 (로컬 다운로드 필요)
+# 임베딩 모델 로드
 embedding_model = SentenceTransformer("/app/models/bert")
 
 class MyEmbedding(Embeddings):
@@ -36,8 +35,12 @@ class MyEmbedding(Embeddings):
 
 embedding_instance = MyEmbedding()
 
-# Gemini API 설정 (환경변수 또는 직접 키 입력 가능)
-genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyBHf6YOLxtwAzqnBSlQEvGd1n38vg7hk6Q"))
+# Gemini API 설정
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다")
+genai.configure(api_key=GEMINI_API_KEY)
 
 app = FastAPI()
 
@@ -61,11 +64,11 @@ class LLMNodeRequest(BaseModel):
 def root():
     return {"message": "Server is running"}
 
-# -------------------------------
+
 # 문서 노드
-# -------------------------------
 @app.post("/node/{projectId}/document")
 def document_node(projectId: str, req: DocumentNodeRequest):
+    tmp_path = None
     try:
         logging.info(f"[문서 노드] PDF 다운로드 시작: {req.object_key}")
         response = requests.get(req.object_key)
@@ -85,26 +88,30 @@ def document_node(projectId: str, req: DocumentNodeRequest):
         )
         split_docs = splitter.split_documents(documents)
 
+        # projectId 검증 - 영숫자와 언더스코어만 허용
+        if not req.projectId.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("잘못된 projectId 형식")
+
         db_dir = os.path.join(BASE_DIR, f"{req.projectId}_{VECTOR_DB_NAME}")
         if os.path.exists(db_dir):
             shutil.rmtree(db_dir)
 
-        vectorstore = Chroma.from_documents(
-            split_docs, embedding_instance, persist_directory=db_dir
-        )
-        vectorstore.persist()
         logging.info(f"[문서 노드] Vector DB 저장 완료: {db_dir}")
 
         os.remove(tmp_path)
         return {"status": 200}
 
+    except requests.RequestException as e:
+        logging.exception(f"[문서 노드] PDF 다운로드 실패: {e}")
+        raise HTTPException(status_code=500, detail="PDF 다운로드 실패") from e
     except Exception as e:
-        logging.error(f"[문서 노드] 처리 실패: {e}")
-        raise HTTPException(status_code=500, detail="문서 처리 실패")
+        logging.exception(f"[문서 노드] 처리 실패: {e}")
+        raise HTTPException(status_code=500, detail="문서 처리 실패") from e
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
-# -------------------------------
 # LLM 노드
-# -------------------------------
 @app.post("/node/{projectId}/llm")
 def llm_node(projectId: str, req: LLMNodeRequest):
     db_dir = os.path.join(BASE_DIR, f"{projectId}_{VECTOR_DB_NAME}")
