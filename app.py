@@ -14,9 +14,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.base import Embeddings
 import google.generativeai as genai
 
-# -------------------------------
+
 # 환경 설정
-# -------------------------------
 BASE_DIR = "/app/vector_store"
 os.makedirs(BASE_DIR, exist_ok=True)
 EMBEDDING_MODEL_NAME = "./models--BM-K--KoSimCSE-bert-multitask"
@@ -24,7 +23,7 @@ VECTOR_DB_NAME = "chroma"
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
-# 임베딩 모델 로드 (로컬 다운로드 필요)
+# 임베딩 모델 로드
 embedding_model = SentenceTransformer("/app/models/bert")
 
 class MyEmbedding(Embeddings):
@@ -36,8 +35,8 @@ class MyEmbedding(Embeddings):
 
 embedding_instance = MyEmbedding()
 
-# Gemini API 설정 (환경변수 또는 직접 키 입력 가능)
-genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyBHf6YOLxtwAzqnBSlQEvGd1n38vg7hk6Q"))
+# Gemini API 설정
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 app = FastAPI()
 
@@ -61,9 +60,8 @@ class LLMNodeRequest(BaseModel):
 def root():
     return {"message": "Server is running"}
 
-# -------------------------------
+
 # 문서 노드
-# -------------------------------
 @app.post("/node/{projectId}/document")
 def document_node(projectId: str, req: DocumentNodeRequest):
     try:
@@ -102,9 +100,8 @@ def document_node(projectId: str, req: DocumentNodeRequest):
         logging.error(f"[문서 노드] 처리 실패: {e}")
         raise HTTPException(status_code=500, detail="문서 처리 실패")
 
-# -------------------------------
+
 # LLM 노드
-# -------------------------------
 @app.post("/node/{projectId}/llm")
 def llm_node(projectId: str, req: LLMNodeRequest):
     db_dir = os.path.join(BASE_DIR, f"{projectId}_{VECTOR_DB_NAME}")
